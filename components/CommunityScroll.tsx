@@ -1,6 +1,6 @@
-
 import React from 'react';
 import { Heart, MessageSquare, MapPin } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface CommunityCardProps {
   image: string;
@@ -10,44 +10,48 @@ interface CommunityCardProps {
   likes: string;
 }
 
-const CommunityCard: React.FC<CommunityCardProps> = ({ image, country, author, title, likes }) => (
-  <div className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl overflow-hidden shadow-lg border border-gray-100 transition-all hover:-translate-y-2 hover:shadow-2xl">
-    <div className="relative h-64">
-      <img src={image} className="w-full h-full object-cover" alt={title} />
-      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full flex items-center gap-2 text-xs font-bold shadow-sm">
-        <MapPin size={12} className="text-[#FF7A18]" />
-        {country}
+const CommunityCard: React.FC<CommunityCardProps> = ({ image, country, author, title, likes }) => {
+  const router = useRouter();
+
+  return (
+    <div className="min-w-[300px] md:min-w-[350px] bg-white rounded-3xl overflow-hidden shadow-lg border border-gray-100 transition-all hover:-translate-y-2 hover:shadow-2xl">
+      <div className="relative h-64">
+        <img src={image} className="w-full h-full object-cover" alt={title} />
+        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full flex items-center gap-2 text-xs font-bold shadow-sm">
+          <MapPin size={12} className="text-[#FF7A18]" />
+          {country}
+        </div>
+      </div>
+      <div className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-orange-100 overflow-hidden">
+            <img src={`https://i.pravatar.cc/100?u=${author}`} className="w-full h-full object-cover" alt={author} />
+          </div>
+          <span className="text-sm font-bold text-gray-800">{author}</span>
+        </div>
+        <h3 className="text-lg font-bold text-[#111111] mb-6 line-clamp-1">{title}</h3>
+        <div className="flex items-center justify-between border-t border-gray-50 pt-4">
+          <div className="flex items-center gap-4">
+            <button className="flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition-colors text-sm font-medium">
+              <Heart size={18} />
+              {likes}
+            </button>
+            <button className="flex items-center gap-1.5 text-gray-400 hover:text-blue-500 transition-colors text-sm font-medium">
+              <MessageSquare size={18} />
+              {Math.floor(Math.random() * 20)}
+            </button>
+          </div>
+          <button
+            onClick={() => router.push('/login')}
+            className="text-xs font-bold text-[#FF7A18] uppercase tracking-wider hover:underline"
+          >
+            View Recipe
+          </button>
+        </div>
       </div>
     </div>
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-8 h-8 rounded-full bg-orange-100 overflow-hidden">
-          <img src={`https://i.pravatar.cc/100?u=${author}`} className="w-full h-full object-cover" alt={author} />
-        </div>
-        <span className="text-sm font-bold text-gray-800">{author}</span>
-      </div>
-      <h3 className="text-lg font-bold text-[#111111] mb-6 line-clamp-1">{title}</h3>
-      <div className="flex items-center justify-between border-t border-gray-50 pt-4">
-        <div className="flex items-center gap-4">
-          <button className="flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition-colors text-sm font-medium">
-            <Heart size={18} />
-            {likes}
-          </button>
-          <button className="flex items-center gap-1.5 text-gray-400 hover:text-blue-500 transition-colors text-sm font-medium">
-            <MessageSquare size={18} />
-            {Math.floor(Math.random() * 20)}
-          </button>
-        </div>
-        <button
-          onClick={() => alert('Redirecting to login page...')}
-          className="text-xs font-bold text-[#FF7A18] uppercase tracking-wider hover:underline"
-        >
-          View Recipe
-        </button>
-      </div>
-    </div>
-  </div>
-);
+  );
+};
 
 const CommunityScroll: React.FC = () => {
   const posts = [
