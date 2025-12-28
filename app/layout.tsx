@@ -13,7 +13,10 @@ export const metadata: Metadata = {
     "Smart cooking decisions, powered by AI and local taste. Discover meals, share cooking posts, and decide what to cook based on available ingredients.",
   keywords: ["cooking", "recipes", "AI chef", "meal planning", "ingredients", "food"],
   authors: [{ name: "Cheffry" }],
-    generator: 'v0.app'
+    generator: 'v0.app',
+  icons: {
+    icon: "/favicon.ico",
+  },
 }
 
 export const viewport: Viewport = {

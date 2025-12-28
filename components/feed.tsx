@@ -18,91 +18,18 @@ export function Feed({ userId, userCountry }: FeedProps) {
 
   const fetchPosts = useCallback(async () => {
     const supabase = createClient()
+    setIsLoading(true)
+    const { data, error } = await supabase.rpc("get_feed", {
+      p_user_id: userId,
+      p_user_country: userCountry,
+    })
 
-    // Fetch posts with profile info
-    const { data: postsData } = await supabase
-      .from("posts")
-      .select(`
-        *,
-        profiles:user_id (id, name, avatar_url, country)
-      `)
-      .order("created_at", { ascending: false })
-      .limit(50)
-
-    if (!postsData) {
-      setIsLoading(false)
-      return
+    if (error) {
+      console.error(error)
+      setPosts([])
+    } else {
+      setPosts(data as Post[])
     }
-
-    // Get user's country interactions for prioritization
-    const { data: countryInteractions } = await supabase
-      .from("user_country_interactions")
-      .select("country, interaction_count")
-      .eq("user_id", userId)
-      .order("interaction_count", { ascending: false })
-
-    // Get interactions count for each post
-    const postIds = postsData.map((p) => p.id)
-
-    const { data: interactions } = await supabase.from("interactions").select("post_id, type").in("post_id", postIds)
-
-    // Get user's interactions
-    const { data: userInteractions } = await supabase
-      .from("interactions")
-      .select("post_id, type")
-      .eq("user_id", userId)
-      .in("post_id", postIds)
-
-    // Get comment counts
-    const { data: comments } = await supabase.from("comments").select("post_id").in("post_id", postIds)
-
-    // Map interactions and comments to posts
-    const enrichedPosts = postsData.map((post) => {
-      const postInteractions = interactions?.filter((i) => i.post_id === post.id) || []
-      const likesCount = postInteractions.filter((i) => i.type === "like").length
-      const dislikesCount = postInteractions.filter((i) => i.type === "dislike").length
-      const commentsCount = comments?.filter((c) => c.post_id === post.id).length || 0
-      const userInteraction = userInteractions?.find((i) => i.post_id === post.id)?.type as
-        | "like"
-        | "dislike"
-        | null
-        | undefined
-
-      return {
-        ...post,
-        likes_count: likesCount,
-        dislikes_count: dislikesCount,
-        comments_count: commentsCount,
-        user_interaction: userInteraction || null,
-      }
-    })
-
-    // Prioritization logic
-    const interactedCountries = countryInteractions?.map((c) => c.country) || []
-
-    const sortedPosts = enrichedPosts.sort((a, b) => {
-      const aCountry = a.country
-      const bCountry = b.country
-
-      // User's country first
-      if (aCountry === userCountry && bCountry !== userCountry) return -1
-      if (bCountry === userCountry && aCountry !== userCountry) return 1
-
-      // Then by interaction count
-      const aInteractionIndex = interactedCountries.indexOf(aCountry)
-      const bInteractionIndex = interactedCountries.indexOf(bCountry)
-
-      if (aInteractionIndex !== -1 && bInteractionIndex === -1) return -1
-      if (bInteractionIndex !== -1 && aInteractionIndex === -1) return 1
-      if (aInteractionIndex !== -1 && bInteractionIndex !== -1) {
-        return aInteractionIndex - bInteractionIndex
-      }
-
-      // Finally by date
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
-
-    setPosts(sortedPosts)
     setIsLoading(false)
   }, [userId, userCountry])
 
@@ -110,37 +37,50 @@ export function Feed({ userId, userCountry }: FeedProps) {
     fetchPosts()
   }, [fetchPosts])
 
-  const handleInteraction = async (postId: string, type: "like" | "dislike") => {
+  const handleInteraction = (postId: string, type: "like" | "dislike") => {
+    const originalPosts = [...posts]
+    const postIndex = posts.findIndex((p) => p.id === postId)
+    if (postIndex === -1) return
+
+    const post = { ...posts[postIndex] }
+    const currentInteraction = post.user_interaction
+
+    const updatedPosts = [...posts]
+    updatedPosts[postIndex] = { ...post }
+
+    const newInteractionType = currentInteraction === type ? null : type
+
+    updatedPosts[postIndex].user_interaction = newInteractionType
+
+    if (currentInteraction === "like") updatedPosts[postIndex].likes_count--
+    if (currentInteraction === "dislike") updatedPosts[postIndex].dislikes_count--
+
+    if (newInteractionType === "like") updatedPosts[postIndex].likes_count++
+    if (newInteractionType === "dislike") updatedPosts[postIndex].dislikes_count++
+
+    setPosts(updatedPosts)
+
+    // DB updates in background
     const supabase = createClient()
-    const post = posts.find((p) => p.id === postId)
-    if (!post) return
+    ;(async () => {
+      if (post.profiles?.country) {
+        await supabase.rpc("increment_country_interaction", {
+          p_user_id: userId,
+          p_country: post.profiles.country,
+        })
+      }
 
-    // Track country interaction
-    if (post.profiles?.country) {
-      await supabase.rpc("increment_country_interaction", {
-        p_user_id: userId,
-        p_country: post.profiles.country,
-      })
-    }
-
-    // Update or remove interaction
-    if (post.user_interaction === type) {
-      // Remove interaction
-      await supabase.from("interactions").delete().eq("user_id", userId).eq("post_id", postId)
-    } else {
-      // Upsert interaction
-      await supabase.from("interactions").upsert(
-        {
-          user_id: userId,
-          post_id: postId,
-          type,
-        },
-        { onConflict: "user_id,post_id" },
-      )
-    }
-
-    // Refresh feed
-    fetchPosts()
+      if (newInteractionType === null) {
+        await supabase.from("interactions").delete().eq("user_id", userId).eq("post_id", postId)
+      } else {
+        await supabase
+          .from("interactions")
+          .upsert({ user_id: userId, post_id: postId, type: newInteractionType }, { onConflict: "user_id,post_id" })
+      }
+    })().catch((error) => {
+      console.error("Failed to update interaction:", error)
+      setPosts(originalPosts) // Revert on error
+    })
   }
 
   if (isLoading) {

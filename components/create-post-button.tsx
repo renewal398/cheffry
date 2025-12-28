@@ -60,44 +60,61 @@ export function CreatePostButton({ userCountry, onPostCreated }: CreatePostButto
     if (!content.trim()) return
 
     setIsSubmitting(true)
+    setError(null)
     const supabase = createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error("You must be logged in to post.")
+      }
 
-    const mediaUrls: string[] = []
-    if (mediaFiles.length > 0) {
-      for (const file of mediaFiles) {
-        const fileExt = file.name.split(".").pop()
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage.from("posts").upload(fileName, file, { upsert: true })
+      const mediaUrls: string[] = []
+      if (mediaFiles.length > 0) {
+        const uploadPromises = mediaFiles.map((file) => {
+          const fileExt = file.name.split(".").pop()
+          const fileName = `${user.id}-${Date.now()}-${Math.random()}.${fileExt}`
+          return supabase.storage.from("posts").upload(fileName, file, { upsert: true })
+        })
 
+        const uploadResults = await Promise.all(uploadPromises)
+
+        const uploadError = uploadResults.find((result) => result.error)
         if (uploadError) {
-          setError(uploadError.message)
-          setIsSubmitting(false)
-          return
+          throw uploadError.error
         }
 
-        const { data } = supabase.storage.from("posts").getPublicUrl(fileName)
-        mediaUrls.push(data.publicUrl)
+        for (const result of uploadResults) {
+          if (result.data) {
+            const { data } = supabase.storage.from("posts").getPublicUrl(result.data.path)
+            mediaUrls.push(data.publicUrl)
+          }
+        }
       }
+
+      const { error: insertError } = await supabase.from("posts").insert({
+        user_id: user.id,
+        content: content.trim(),
+        country: userCountry,
+        media_urls: mediaUrls,
+      })
+
+      if (insertError) {
+        throw insertError
+      }
+
+      setContent("")
+      setMediaFiles([])
+      setMediaPreviews([])
+      setOpen(false)
+      onPostCreated?.()
+    } catch (error: any) {
+      setError(error.message)
+    } finally {
+      setIsSubmitting(false)
     }
-
-    await supabase.from("posts").insert({
-      user_id: user.id,
-      content: content.trim(),
-      country: userCountry,
-      media_urls: mediaUrls,
-    })
-
-    setContent("")
-    setMediaFiles([])
-    setMediaPreviews([])
-    setOpen(false)
-    setIsSubmitting(false)
-    onPostCreated?.()
   }
 
   return (
