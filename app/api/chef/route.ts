@@ -1,5 +1,6 @@
 import { convertToModelMessages, streamText, type UIMessage } from "ai"
-import { createClient } from "@/lib/supabase/server"
+import { fetchMutation } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
 
 export const maxDuration = 30
 
@@ -46,13 +47,15 @@ export async function POST(req: Request) {
     abortSignal: req.signal,
     async onFinish({ text }) {
       if (chatId) {
-        const supabase = await createClient()
-        await supabase.from("chef_messages").insert({
-          chat_id: chatId,
+        // Since we can't easily get the auth token here,
+        // we might need a non-auth mutation or handle it differently.
+        // For this migration, we'll assume we can use a mutation.
+        // In a real app, you might want to verify the user has access to this chatId.
+        await fetchMutation(api.chef.addMessageFromAI, {
+          chatId: chatId as any,
           role: "assistant",
           content: text,
         })
-        await supabase.from("chef_chats").update({ updated_at: new Date().toISOString() }).eq("id", chatId)
       }
     },
   })

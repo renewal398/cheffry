@@ -22,13 +22,14 @@ const nextConfig = {
   },
 }
 
-// IMPORTANT: This application requires Supabase environment variables to run correctly.
+// IMPORTANT: This application requires Convex environment variables to run correctly.
 // A server-side exception will occur if the following variables are not set in your
 // deployment environment (e.g., Vercel, Netlify, or a self-hosted server):
 //
-// - NEXT_PUBLIC_SUPABASE_URL
-// - NEXT_PUBLIC_SUPABASE_ANON_KEY
+// - CONVEX_DEPLOYMENT
+// - NEXT_PUBLIC_CONVEX_URL
+// - CONVEX_AUTH_SECRET
 //
-// You can find these values in your Supabase project's API settings.
+// You can find these values in your Convex project settings.
 
 export default nextConfig

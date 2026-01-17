@@ -4,7 +4,8 @@ import React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,41 +56,42 @@ export function CreatePostButton({ userCountry, onPostCreated }: CreatePostButto
     setMediaPreviews(files.map((file) => URL.createObjectURL(file)))
   }
 
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl)
+  const createPost = useMutation(api.posts.create)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!content.trim()) return
 
     setIsSubmitting(true)
-    const supabase = createClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return
-
-    const mediaUrls: string[] = []
+    const mediaStorageIds: string[] = []
     if (mediaFiles.length > 0) {
       for (const file of mediaFiles) {
-        const fileExt = file.name.split(".").pop()
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`
-        const { error: uploadError } = await supabase.storage.from("posts").upload(fileName, file, { upsert: true })
+        try {
+          const uploadUrl = await generateUploadUrl()
+          const result = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": file.type },
+            body: file,
+          })
 
-        if (uploadError) {
-          setError(uploadError.message)
+          if (!result.ok) throw new Error("Upload failed")
+
+          const { storageId } = await result.json()
+          mediaStorageIds.push(storageId)
+        } catch (err: any) {
+          setError(err.message)
           setIsSubmitting(false)
           return
         }
-
-        const { data } = supabase.storage.from("posts").getPublicUrl(fileName)
-        mediaUrls.push(data.publicUrl)
       }
     }
 
-    await supabase.from("posts").insert({
-      user_id: user.id,
+    await createPost({
       content: content.trim(),
       country: userCountry,
-      media_urls: mediaUrls,
+      mediaStorageIds,
     })
 
     setContent("")

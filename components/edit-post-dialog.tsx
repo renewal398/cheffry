@@ -4,7 +4,8 @@ import React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import type { Post } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -23,19 +24,19 @@ export function EditPostDialog({ open, onOpenChange, post, onSaved }: EditPostDi
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
 
+  const updatePost = useMutation(api.posts.update)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!content.trim()) return
 
     setIsSubmitting(true)
-    const supabase = createClient()
 
-    await supabase.from("posts").update({ content: content.trim() }).eq("id", post.id)
+    await updatePost({ id: post.id as any, content: content.trim() })
 
     setIsSubmitting(false)
     onOpenChange(false)
     onSaved()
-    router.refresh()
   }
 
   return (

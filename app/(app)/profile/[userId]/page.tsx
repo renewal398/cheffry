@@ -1,13 +1,13 @@
 import React, { Suspense } from "react"
-import { createClient } from "@/lib/supabase/server"
+import { fetchQuery } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ProfileHeader } from "@/components/profile-header"
 import { UserPosts } from "@/components/user-posts"
 import { FeedSkeleton } from "@/components/feed-skeleton"
 
 export default async function UserProfilePage({ params }: { params: { userId: string } }) {
-  const supabase = await createClient()
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", params.userId).single()
+  const profile: any = await fetchQuery(api.users.getProfile, { userId: params.userId as any })
 
   return (
     <div className="flex flex-col h-screen">

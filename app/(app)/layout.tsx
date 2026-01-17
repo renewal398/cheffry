@@ -1,6 +1,8 @@
 import React from "react"
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server"
+import { fetchQuery } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
 import { AppSidebar } from "@/components/app-sidebar"
 import { BottomNav } from "@/components/bottom-nav"
 import { SidebarProvider } from "@/components/ui/sidebar"
@@ -10,23 +12,18 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const token = await convexAuthNextjsToken()
+  const profile = await fetchQuery(api.users.viewer, {}, { token })
 
-  if (!user) {
+  if (!profile) {
     redirect("/login")
   }
-
-  // Get user profile
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <div className="hidden md:block">
-          <AppSidebar user={user} profile={profile} />
+          <AppSidebar user={profile} profile={profile} />
         </div>
         <main className="flex-1 overflow-auto pb-16 md:pb-0">{children}</main>
         <BottomNav />

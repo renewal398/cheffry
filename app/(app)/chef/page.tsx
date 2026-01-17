@@ -1,54 +1,18 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
+import React, { useState } from "react"
+import { useQuery } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { ChefChat } from "@/components/chef-chat"
 import { Button } from "@/components/ui/button"
 import { Icons } from "@/components/icons"
-import type { Profile, ChefChat as ChefChatType } from "@/lib/types"
-import type { User } from "@supabase/supabase-js"
 
 export default function ChefPage() {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [chats, setChats] = useState<ChefChatType[]>([])
+  const profile = useQuery(api.users.viewer)
+  const chats = useQuery(api.chef.listChats) || []
   const [showSidebar, setShowSidebar] = useState(false)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-
-      if (user) {  
-        const { data: profileData } = await supabase.from("profiles").select("*").eq("id", user.id).single()  
-        setProfile(profileData)  
-
-        const { data: chatsData } = await supabase  
-          .from("chef_chats")  
-          .select("*")  
-          .eq("user_id", user.id)  
-          .order("updated_at", { ascending: false })  
-        setChats(chatsData || [])  
-      }  
-    }  
-    fetchData()
-  }, [])
-
-  // Function to refresh chats from database
-  const refreshChats = async () => {
-    if (user) {
-      const supabase = createClient()
-      const { data: chatsData } = await supabase  
-        .from("chef_chats")  
-        .select("*")  
-        .eq("user_id", user.id)  
-        .order("updated_at", { ascending: false })  
-      setChats(chatsData || [])  
-    }
-  }
-
-  if (!user) {
+  if (!profile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Icons.spinner className="h-8 w-8 animate-spin" />
@@ -76,13 +40,12 @@ export default function ChefPage() {
       {/* Main content with padding to account for fixed header */}  
       <div className="flex-1 overflow-hidden pt-14">
         <ChefChat  
-          userId={user.id}  
+          userId={profile._id}
           userCountry={profile?.country || "Unknown"}  
-          initialChats={chats}  
           showSidebar={showSidebar}  
           setShowSidebar={setShowSidebar}  
-          onChatCreated={refreshChats}  // CHANGE: Pass refresh callback
-          onChatDeleted={refreshChats}  // CHANGE: Pass refresh callback
+          onChatCreated={() => {}}
+          onChatDeleted={() => {}}
         />  
       </div>  
     </div>
