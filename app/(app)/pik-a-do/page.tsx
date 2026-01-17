@@ -1,14 +1,12 @@
 import React from "react"
-import { createClient } from "@/lib/supabase/server"
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server"
+import { fetchQuery } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
 import { PikADoWizard } from "@/components/pik-a-do-wizard"
 
 export default async function PikADoPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single()
+  const token = await convexAuthNextjsToken()
+  const profile: any = await fetchQuery(api.users.viewer, {}, { token })
 
   return (
     <div className="flex flex-col h-screen">

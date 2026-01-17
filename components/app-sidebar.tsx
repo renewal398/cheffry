@@ -2,8 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import type { User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/client"
+import { useAuthActions } from "@convex-dev/auth/react"
 import type { Profile } from "@/lib/types"
 import { Icons } from "@/components/icons"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -29,7 +28,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 
 interface AppSidebarProps {
-  user: User
+  user: any
   profile: Profile | null
 }
 
@@ -46,9 +45,10 @@ export function AppSidebar({ user, profile }: AppSidebarProps) {
   const router = useRouter()
   const { isMobile } = useSidebar()
 
+  const { signOut } = useAuthActions()
+
   const handleLogout = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await signOut()
     router.push("/")
   }
 

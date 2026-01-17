@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
-import { createClient } from "@/lib/supabase/client"
+import { useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import type { Post } from "@/lib/types"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,14 +33,14 @@ export function UserPostCard({ post, onRefresh }: UserPostCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
+  const removePost = useMutation(api.posts.remove)
+
   const handleDelete = async () => {
     setIsDeleting(true)
-    const supabase = createClient()
-    await supabase.from("posts").delete().eq("id", post.id)
+    await removePost({ id: post.id as any })
     setShowDeleteDialog(false)
     setIsDeleting(false)
     onRefresh()
-    router.refresh()
   }
 
   const handleShare = async () => {

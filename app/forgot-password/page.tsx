@@ -4,7 +4,7 @@ import React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { useAuthActions } from "@convex-dev/auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,17 +17,15 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
+  const { signIn } = useAuthActions()
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      })
-      if (error) throw error
+      await signIn("password", { email, flow: "reset" })
       setSuccess(true)
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")

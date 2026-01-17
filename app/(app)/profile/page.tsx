@@ -1,16 +1,14 @@
 import React, { Suspense } from "react"
-import { createClient } from "@/lib/supabase/server"
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server"
+import { fetchQuery } from "convex/nextjs"
+import { api } from "@/convex/_generated/api"
 import { ProfileHeader } from "@/components/profile-header"
 import { UserPosts } from "@/components/user-posts"
 import { FeedSkeleton } from "@/components/feed-skeleton"
 
 export default async function ProfilePage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single()
+  const token = await convexAuthNextjsToken()
+  const profile: any = await fetchQuery(api.users.viewer, {}, { token })
 
   return (
     <div className="flex flex-col h-screen">
@@ -23,7 +21,7 @@ export default async function ProfilePage() {
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-foreground mb-4">Your Posts</h2>
             <Suspense fallback={<FeedSkeleton />}>
-              <UserPosts userId={user!.id} />
+              <UserPosts userId={profile?._id} />
             </Suspense>
           </div>
         </div>

@@ -2,10 +2,10 @@
 
 import React from "react"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { createClient } from "@/lib/supabase/client"
-import type { Comment } from "@/lib/types"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -21,49 +21,23 @@ interface CommentsSheetProps {
 }
 
 export function CommentsSheet({ open, onOpenChange, postId, userId, onCommentAdded }: CommentsSheetProps) {
-  const [comments, setComments] = useState<Comment[]>([])
+  const comments = useQuery(api.comments.listByPostId, open ? { postId: postId as any } : "skip")
+  const createComment = useMutation(api.comments.create)
   const [newComment, setNewComment] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      fetchComments()
-    }
-  }, [open, postId])
-
-  const fetchComments = async () => {
-    setIsLoading(true)
-    const supabase = createClient()
-
-    const { data } = await supabase
-      .from("comments")
-      .select(`
-        *,
-        profiles:user_id (id, name, avatar_url, country)
-      `)
-      .eq("post_id", postId)
-      .order("created_at", { ascending: true })
-
-    setComments(data || [])
-    setIsLoading(false)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newComment.trim()) return
 
     setIsSubmitting(true)
-    const supabase = createClient()
 
-    await supabase.from("comments").insert({
-      post_id: postId,
-      user_id: userId,
+    await createComment({
+      postId: postId as any,
       content: newComment.trim(),
     })
 
     setNewComment("")
-    fetchComments()
     onCommentAdded()
     setIsSubmitting(false)
   }
@@ -76,7 +50,7 @@ export function CommentsSheet({ open, onOpenChange, postId, userId, onCommentAdd
         </SheetHeader>
 
         <div className="flex-1 overflow-auto py-4">
-          {isLoading ? (
+          {comments === undefined ? (
             <div className="flex items-center justify-center py-8">
               <Icons.spinner className="h-6 w-6 animate-spin text-primary" />
             </div>

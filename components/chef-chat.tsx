@@ -4,7 +4,8 @@ import React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
-import { createClient } from "@/lib/supabase/client"
+import { useQuery, useMutation } from "convex/react"
+import { api } from "@/convex/_generated/api"
 import type { ChefChat as ChefChatType, ChefMessage } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,7 +16,6 @@ import { ChatSidebar } from "@/components/chat-sidebar"
 interface ChefChatProps {
   userId: string
   userCountry: string
-  initialChats: ChefChatType[]
   showSidebar: boolean
   setShowSidebar: (show: boolean) => void
   onChatCreated?: () => void
@@ -25,13 +25,16 @@ interface ChefChatProps {
 export function ChefChat({
   userId,
   userCountry,
-  initialChats,
   showSidebar,
   setShowSidebar,
   onChatCreated,
   onChatDeleted,
 }: ChefChatProps) {
-  const [chats, setChats] = useState<ChefChatType[]>(initialChats)
+  const chats = useQuery(api.chef.listChats) || []
+  const addMessage = useMutation(api.chef.addMessage)
+  const createChatMutation = useMutation(api.chef.createChat)
+  const removeChatMutation = useMutation(api.chef.deleteChat)
+
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
   const [isNewChatStarted, setIsNewChatStarted] = useState(false)
@@ -40,11 +43,6 @@ export function ChefChat({
   
   // Fix currentChatId race condition
   const chatIdRef = useRef<string | null>(null)
-
-  // Sync initialChats properly
-  useEffect(() => {
-    setChats(initialChats)
-  }, [initialChats])
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chef" }),
@@ -78,27 +76,12 @@ export function ChefChat({
 
       console.log("Saving assistant message:", { chatId, assistantTextLength: assistantText.length })
 
-      // Save assistant message to database when streaming finishes
-      const supabase = createClient()
       try {
-        const { data, error } = await supabase.from("chef_messages").insert({
-          chat_id: chatId,
+        await addMessage({
+          chatId: chatId as any,
           role: "assistant",
           content: assistantText,
-        }).select()
-
-        if (error) {
-          console.error("Error saving assistant message:", error)
-        } else {
-          console.log("Assistant message saved to database:", data)
-        }
-
-        // Update the chat's updated_at timestamp
-        await supabase
-          .from("chef_chats")
-          .update({ updated_at: new Date().toISOString() })
-          .eq("id", chatId)
-
+        })
       } catch (error) {
         console.error("Error saving assistant message:", error)
       }
@@ -116,41 +99,22 @@ export function ChefChat({
     scrollToBottom()
   }, [messages])
 
+  const fetchMessages = useQuery(api.chef.getMessages, currentChatId ? { chatId: currentChatId as any } : "skip")
+
+  useEffect(() => {
+    if (fetchMessages) {
+      const formattedMessages = fetchMessages.map((msg: any) => ({
+        id: msg._id,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        parts: [{ type: "text" as const, text: msg.content }],
+      }))
+      setMessages(formattedMessages)
+    }
+  }, [fetchMessages, setMessages])
+
   const loadChatMessages = async (chatId: string) => {
     console.log("Loading chat messages for:", chatId)
-    
-    const supabase = createClient()
-    const { data: chatMessages, error } = await supabase
-      .from("chef_messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("created_at", { ascending: true })
-
-    if (error) {
-      console.error("Error loading chat messages:", error)
-      return
-    }
-
-    console.log("Loaded chat messages:", chatMessages)
-
-    if (chatMessages) {    
-      // FIX: Format messages properly for the UI
-      const formattedMessages = chatMessages.map((msg: ChefMessage) => {
-        console.log("Formatting message:", msg)
-        return {
-          id: msg.id,
-          role: msg.role as "user" | "assistant",
-          content: msg.content, // Add content field for debugging
-          parts: [{ type: "text" as const, text: msg.content }],
-        }
-      })
-      
-      console.log("Formatted messages for UI:", formattedMessages)
-      setMessages(formattedMessages)
-    } else {
-      console.log("No chat messages found")
-      setMessages([])
-    }
     
     // Update ref and state
     chatIdRef.current = chatId
@@ -168,8 +132,7 @@ export function ChefChat({
   }
 
   const deleteChat = async (chatId: string) => {
-    const supabase = createClient()
-    await supabase.from("chef_chats").delete().eq("id", chatId)
+    await removeChatMutation({ chatId: chatId as any })
     
     if (currentChatId === chatId) {
       chatIdRef.current = null
@@ -191,45 +154,34 @@ export function ChefChat({
 
     // Create a new chat if none exists    
     if (!chatId) {    
-      const supabase = createClient()    
-      const { data: newChat } = await supabase    
-        .from("chef_chats")    
-        .insert({    
-          user_id: userId,    
+      try {
+        const newChatId = await createChatMutation({
           title: inputValue.substring(0, 50) + (inputValue.length > 50 ? "..." : ""),    
         })    
-        .select()    
-        .single()    
 
-      if (newChat) {    
-        chatId = newChat.id
-        chatWasJustCreated = true
-        
-        // Update ref and state
-        chatIdRef.current = chatId
-        setCurrentChatId(chatId)
-        setIsNewChatStarted(false)
-      } else {
-        console.error("Failed to create new chat")
+        if (newChatId) {
+          chatId = newChatId as string
+          chatWasJustCreated = true
+
+          // Update ref and state
+          chatIdRef.current = chatId
+          setCurrentChatId(chatId)
+          setIsNewChatStarted(false)
+        }
+      } catch (err) {
+        console.error("Failed to create new chat", err)
         return
       }
     }    
 
     // Save user message to database    
     if (chatId) {    
-      const supabase = createClient()    
       try {
-        // Block UI if DB insert fails
-        const { error } = await supabase.from("chef_messages").insert({    
-          chat_id: chatId,    
+        await addMessage({
+          chatId: chatId as any,
           role: "user",    
           content: inputValue,    
         })
-
-        if (error) {
-          console.error("Error saving user message:", error)
-          return // STOP HERE if insert fails
-        }
       } catch (error) {
         console.error("Error saving user message:", error)
         return // STOP HERE if insert fails
